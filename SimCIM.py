@@ -69,14 +69,6 @@ class Simcim:
         arg = torch.tensor(self.S, dtype=self.datatype).to(self.device) * (i / self.N - 0.5)
         return self.Jmax * self.O * (torch.tanh(arg) + self.D)
 
-    def pump_lin(self):
-        t = self.dt * torch.arange(self.N, dtype=self.datatype).to(self.device)
-        eigs = torch.eig(self.J)[0][:, 0]
-        eig_min = torch.min(eigs)
-        eig_max = torch.max(eigs)
-        p = -self.zeta * eig_max + self.zeta * (eig_max - eig_min) / t[-1] * t
-        return p
-
     # Amplitude initializer
     def init_ampl(self):
         """
@@ -86,9 +78,6 @@ class Simcim:
             torch.Tensor: Initialized amplitude values.
         """
         return torch.zeros((self.dim, self.attempt_num), dtype=self.datatype).to(self.device)
-
-    def tanh(self, c):
-        return self.c_th * torch.tanh(c)
 
     # Evolution of Amplitudes
     # N -- number of time iterations
@@ -131,10 +120,6 @@ class Simcim:
         # Initialize amplitudes matrix for all variables and attempts
         c_current = self.init_ampl()
 
-        # Initializing full array of amplitudes
-        #     c_full = torch.zeros(N,dim,attempt_num)
-        #     c_full[0] = c_current
-
         # Creating the array for evolving amplitudes from random attempt
         c_evol = torch.empty((self.dim, self.N), dtype=self.datatype).to(self.device)
         c_evol[:, 0] = c_current[:, random_attempt]
@@ -143,12 +128,8 @@ class Simcim:
         p = self.pump()
         #     p = self.pump_lin()
 
-        # Define coupling growth
-        #     zeta = coupling(init_value,final_value,dt,N)
-
         # Initializing moving average of amplitudes increment
         dc_momentum = torch.zeros((self.dim, self.attempt_num), dtype=self.datatype).to(self.device)
-        #     free_energy_ar = torch.empty(self.N-1, dtype = self.datatype).to(device)
 
         for i in range(1, self.N):
             c_prev = c_current  # Store previous amplitude state
@@ -166,13 +147,7 @@ class Simcim:
             th_test = (torch.abs(c1) < self.c_th).type(self.datatype)
 
             # Updating c_current
-            #         c_current = c_current + th_test*dc_momentum
             c_current = th_test * (c_current + dc_momentum) + (1. - th_test) * torch.sign(c_current) * self.c_th
-            #         c_current = step(c_current + dc_momentum,c_th,device, datatype)
-            #         c_current = tanh(c1,c_th)
-
-            # Updating c_full
-            #         c_full[i] = torch.tanh(c_full[i-1] + dc_momentum)
 
             # Check for convergence (if it hasn't already been reached)
             if not is_converged:
@@ -197,9 +172,6 @@ class Simcim:
 
             # if is_converged:
             #     break
-
-            # s = torch.sign(c_current)
-            # free_energy_ar[i-1] = self.free_energy(s,self.beta)
 
         return c_current, c_evol, convergence_step  # , free_energy_ar
 
